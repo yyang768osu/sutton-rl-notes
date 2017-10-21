@@ -1,7 +1,6 @@
 '''
 Jacks Car Rental problem
 '''
-from collections import namedtuple
 from itertools import product
 import copy
 import numpy as np
@@ -9,7 +8,7 @@ import numpy as np
 
 class MM1NQueue(object):
     '''
-    define a M/M/1/n queue, where n = max_num_pkt
+    define a M/M/1/N queue, where N = max queue size
     '''
     def __init__(self, ini_num_pkt, max_num_pkt, arrival_rate, service_rate):
         self.ini_num_pkt = ini_num_pkt
@@ -109,67 +108,71 @@ class JacksCarRental(object):
              self.num_car_trans_reward_loc1[ini_num_car]) = queue_loc1.run_multiple_unit_slots()
             (self.num_car_trans_prob_loc2[ini_num_car],
              self.num_car_trans_reward_loc2[ini_num_car]) = queue_loc2.run_multiple_unit_slots()
+        self.num_car_trans_reward_loc1 = 10 * self.num_car_trans_reward_loc1
+        self.num_car_trans_reward_loc2 = 10 * self.num_car_trans_reward_loc2
 
     def value_iteration(self,
-                         gamma=0.8,
-                         num_iter_improvement=5):
+                        gamma=0.9,
+                        num_iter_improvement=5):
         '''
-        policy iteration generator function
+        value iteration generator function
         '''
-        A = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1), dtype=int)
+        action_matrix = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1), dtype=int)
 
         # Policy iteration
         for _ in range(num_iter_improvement):
             # policy evaluation
-            V = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1))
-            self.policy_evaluation(V, A, gamma)
-            yield copy.deepcopy(V), copy.deepcopy(A)
-            self.policy_improvement(V, A, gamma)
+            value_matrix = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1))
+            self.policy_evaluation(value_matrix, action_matrix, gamma)
+            yield copy.deepcopy(value_matrix), copy.deepcopy(action_matrix)
+            self.policy_improvement(value_matrix, action_matrix, gamma)
 
     def policy_iteration(self,
-                         gamma=0.8,
+                         gamma=0.9,
                          num_iter_eval=100,
                          num_iter_improvement=5):
         '''
         policy iteration generator function
         '''
-        A = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1), dtype=int)
+        action_matrix = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1), dtype=int)
 
         # Policy iteration
         for _ in range(num_iter_improvement):
             # policy evaluation
-            V = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1))
+            value_matrix = np.zeros(shape=(self.max_num_car+1, self.max_num_car+1))
             for _ in range(num_iter_eval):
-                self.policy_evaluation(V, A, gamma)
+                self.policy_evaluation(value_matrix, action_matrix, gamma)
 
-            yield copy.deepcopy(V), copy.deepcopy(A)
-            self.policy_improvement(V, A, gamma)
+            yield copy.deepcopy(value_matrix), copy.deepcopy(action_matrix)
+            self.policy_improvement(value_matrix, action_matrix, gamma)
 
-    def policy_evaluation(self, V, A, gamma):
+    def policy_evaluation(self, value_matrix, action_matrix, gamma):
         '''
         policy evaluation
         '''
-        V_old = copy.deepcopy(V)
-        for i, j in product(range(self.max_num_car+1), range(self.max_num_car+1)):
-            l = i - A[i, j]
-            m = j + A[i, j]
+        value_matrix_old = copy.deepcopy(value_matrix)
+        for i, j in product(range(self.max_num_car+1), 
+                            range(self.max_num_car+1)):
+            l = i - action_matrix[i, j]
+            m = j + action_matrix[i, j]
             prob_transition_matrix = \
             self.num_car_trans_prob_loc1[l].reshape((self.max_num_car+1, 1))*\
             self.num_car_trans_prob_loc2[m]
-            V[i, j] = (self.num_car_trans_reward_loc1[l] +
-                       self.num_car_trans_reward_loc2[m] +
-                       gamma*sum(sum(prob_transition_matrix*V_old)))
+            value_matrix[i, j] = (self.num_car_trans_reward_loc1[l] +
+                                  self.num_car_trans_reward_loc2[m] +
+                                  gamma*sum(sum(prob_transition_matrix*value_matrix_old)) -
+                                  abs(action_matrix[i, j])*2)
 
-    def policy_improvement(self, V, A, gamma):
+    def policy_improvement(self, value_matrix, action_matrix, gamma):
         '''
         greedy policy improvement
         '''
         for i, j in product(range(self.max_num_car+1), range(self.max_num_car+1)):
             action = 0
             max_reward = 0
-            for a in range(-self.max_num_move_car, self.max_num_move_car+1):
-                l = i - a
-                m = j + a
+            for potential_action in range(-self.max_num_move_car, self.max_num_move_car+1):
+                l = i - potential_action
+                m = j + potential_action
                 if (l >= 0 and l <= self.max_num_car and
                         m >= 0  and m <= self.max_num_car):
                     prob_transition_matrix =\
@@ -177,14 +180,15 @@ class JacksCarRental(object):
                     self.num_car_trans_prob_loc2[m]
                     reward = (self.num_car_trans_reward_loc1[l] +
                               self.num_car_trans_reward_loc2[m] +
-                              gamma*sum(sum(prob_transition_matrix*V)))
+                              gamma*sum(sum(prob_transition_matrix*value_matrix)) -
+                              abs(potential_action)*2)
                     if reward > max_reward:
-                        action = a
+                        action = potential_action
                         max_reward = reward
-            A[i, j] = action
+            action_matrix[i, j] = action
 
 # module testing code
 if __name__ == '__main__':
     jacks_car_rental = JacksCarRental()
-    for V, A in jacks_car_rental.policy_iteration(num_iter_improvement=5):
-        print(A)
+    for value_matrix, action_matrix in jacks_car_rental.policy_iteration(num_iter_improvement=5):
+        print(action_matrix)
