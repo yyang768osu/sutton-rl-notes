@@ -72,6 +72,10 @@ class Maze(World):
         assert(blocked_state != self._dest)
         self._blocked_state_set.add(blocked_state)
 
+    def remove_blocked_state(self, blocked_state):
+        assert(blocked_state in self._blocked_state_set)
+        self._blocked_state_set.remove(blocked_state)
+
     def is_blocked_state(self, state):
         return state in self._blocked_state_set
 
@@ -163,6 +167,9 @@ class DynaQAlgorithm(object):
                 self.q_learning(curr_state, action, reward, next_state)
 
     def q_learning(self, curr_state, action, reward, next_state):
+        if curr_state == next_state:
+            self._q_value[(curr_state, action)] = 0
+            return
         td_target = reward + self._gamma*max([self._q_value[(next_state, next_action)]
                                               for next_action in self._state_to_aval_action[next_state]])
         td_error = td_target - self._q_value[(curr_state, action)]
@@ -189,15 +196,18 @@ if __name__ == '__main__':
     maze.add_blocked_state(MazeState(x=7, y=2))
 
     dyna_q_algorithm = DynaQAlgorithm(world=maze, 
-                                      num_sim_per_real_action=100, 
-                                      greedy_epsilon=0.01,
+                                      num_sim_per_real_action=10, 
+                                      greedy_epsilon=0.2,
                                       gamma=0.9,
-                                      alpha=0.9)
-    #for step in range(100):
-    step = 0
-    while True:
+                                      alpha=0.5)
+    for step in range(1000):
         dyna_q_algorithm.run()
         print(step, dyna_q_algorithm.get_acc_reward())
-        if dyna_q_algorithm.get_acc_reward() == 100:
-            break
-        step = step + 1
+    
+    maze.remove_blocked_state(MazeState(x=0, y=2))
+    maze.add_blocked_state(MazeState(x=8, y=2))
+
+    for step in range(1000, 3000):
+        dyna_q_algorithm.run()
+        print(step, dyna_q_algorithm.get_acc_reward())
+    
