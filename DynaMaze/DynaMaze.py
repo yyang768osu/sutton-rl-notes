@@ -156,10 +156,11 @@ class DynaQAlgorithm(object):
         self.q_learning(curr_state, action, reward, next_state)
         # register the transition to the dyna_model
         self._dyna_model.update_model(curr_state, action, reward, next_state)
-        for _ in range(self._num_sim_per_real_action):
-            # get random state
-            curr_state, action, reward, next_state = self._dyna_model.simulate_model()
-            self._dyna_model.update_model(curr_state, action, reward, next_state)
+        if any([self._q_value[key]>0.01 for key in self._q_value]):
+            for _ in range(self._num_sim_per_real_action):
+                # get random state
+                curr_state, action, reward, next_state = self._dyna_model.simulate_model()
+                self.q_learning(curr_state, action, reward, next_state)
 
     def q_learning(self, curr_state, action, reward, next_state):
         td_target = reward + self._gamma*max([self._q_value[(next_state, next_action)]
@@ -188,10 +189,15 @@ if __name__ == '__main__':
     maze.add_blocked_state(MazeState(x=7, y=2))
 
     dyna_q_algorithm = DynaQAlgorithm(world=maze, 
-                                      num_sim_per_real_action=1, 
+                                      num_sim_per_real_action=100, 
                                       greedy_epsilon=0.01,
                                       gamma=0.9,
-                                      alpha=0.1)
-    for _ in range(10000):
+                                      alpha=0.9)
+    #for step in range(100):
+    step = 0
+    while True:
         dyna_q_algorithm.run()
-        print(dyna_q_algorithm.get_acc_reward())
+        print(step, dyna_q_algorithm.get_acc_reward())
+        if dyna_q_algorithm.get_acc_reward() == 100:
+            break
+        step = step + 1
