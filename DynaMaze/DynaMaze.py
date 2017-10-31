@@ -6,20 +6,24 @@ import numpy as np
 class DynaModel(object):
     def __init__(self):
         self._state_set = set()
-        self._state_to_action = defaultdict(set)
+        self._state_to_visited_action = defaultdict(set)
         self._state_action_to_reward = defaultdict(int)
         self._state_action_to_state = defaultdict(int)
 
     def simulate_model(self):
         state = random.sample(self._state_set, k=1)[0]
-        action = random.sample(self._state_to_action[state], k=1)[0]
+        action = random.sample(self._state_to_visited_action[state], k=1)[0]
         reward = self._state_action_to_reward[(state, action)]
         next_state = self._state_action_to_state[(state, action)]
         return state, action, reward, next_state
 
-    def update_model(self, state, action, reward, next_state):
+    def update_model(self, state, action, reward, next_state, aval_action_set):
+        if state not in self._state_set:
+            for aval_action in aval_action_set:
+                self._state_to_visited_action[state].add(aval_action)
+                self._state_action_to_reward[(state, aval_action)] = 0
+                self._state_action_to_state[(state, aval_action)] = state
         self._state_set.add(state)
-        self._state_to_action[state].add(action)
         self._state_action_to_reward[(state, action)] = reward
         self._state_action_to_state[(state, action)] = next_state
 
@@ -160,17 +164,18 @@ class DynaQAlgorithm(object):
         # Q learning
         self.q_learning(curr_state, action, reward, next_state)
         # register the transition to the dyna_model
-        self._dyna_model.update_model(curr_state, action, reward, next_state)
-        if any([self._q_value[key]>0.01 for key in self._q_value]):
+        self._dyna_model.update_model(curr_state, 
+                                      action, 
+                                      reward, 
+                                      next_state,
+                                      self._state_to_aval_action[curr_state])
+        if any([self._q_value[key]>0.0001 for key in self._q_value]):
             for _ in range(self._num_sim_per_real_action):
                 # get random state
                 curr_state, action, reward, next_state = self._dyna_model.simulate_model()
                 self.q_learning(curr_state, action, reward, next_state)
 
     def q_learning(self, curr_state, action, reward, next_state):
-        if curr_state == next_state:
-            self._q_value[(curr_state, action)] = 0
-            return
         td_target = reward + self._gamma*max([self._q_value[(next_state, next_action)]
                                               for next_action in self._state_to_aval_action[next_state]])
         td_error = td_target - self._q_value[(curr_state, action)]
