@@ -35,6 +35,9 @@ class DynaModel(object):
         for key in self._state_action_to_staleness:
             self._state_action_to_staleness[key] = self._state_action_to_staleness[key] + 1
 
+    def get_staleness_count(self, state, action):
+        return self._state_action_to_staleness[(state, action)]
+
 class World(object):
     def take_action_get_reward(self, action):
         raise NotImplementedError()
@@ -125,12 +128,14 @@ class DynaQAlgorithm(object):
                  num_sim_per_real_action=10,
                  gamma=0.9,
                  alpha=0.1,
-                 greedy_epsilon=0.1):
+                 greedy_epsilon=0.1,
+                 staleness_bonus_epsilon=0.001):
         self._world = world
         self._num_sim_per_real_action = num_sim_per_real_action
         self._greedy_epsilon = greedy_epsilon
         self._alpha = alpha
         self._gamma = gamma
+        self._staleness_bonus_epsilon = staleness_bonus_epsilon
         self.reset()
 
     def reset(self):
@@ -167,9 +172,9 @@ class DynaQAlgorithm(object):
         # record available action in the updated state
         self._state_to_aval_action[next_state] = self._world.get_curr_aval_action_set()
         # register the transition to the dyna_model
-        self._dyna_model.update_model(curr_state, 
-                                      action, 
-                                      reward, 
+        self._dyna_model.update_model(curr_state,
+                                      action,
+                                      reward,
                                       next_state,
                                       self._state_to_aval_action[curr_state])
         # Q learning
@@ -182,8 +187,10 @@ class DynaQAlgorithm(object):
                 self.q_learning(curr_state, action, reward, next_state)
 
     def q_learning(self, curr_state, action, reward, next_state):
-        td_target = reward + self._gamma*max([self._q_value[(next_state, next_action)]
-                                              for next_action in self._state_to_aval_action[next_state]])
+        td_target = reward + \
+                    self._staleness_bonus_epsilon*np.sqrt(self._dyna_model.get_staleness_count(curr_state, action)) + \
+                    self._gamma*max(self._q_value[(next_state, next_action)]
+                                    for next_action in self._state_to_aval_action[next_state])
         td_error = td_target - self._q_value[(curr_state, action)]
         self._q_value[(curr_state, action)] = self._q_value[(curr_state, action)] + self._alpha*td_error
         if self._q_value[(curr_state, action)] < 0.05:
