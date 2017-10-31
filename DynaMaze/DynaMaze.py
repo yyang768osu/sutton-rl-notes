@@ -9,6 +9,7 @@ class DynaModel(object):
         self._state_to_visited_action = defaultdict(set)
         self._state_action_to_reward = defaultdict(int)
         self._state_action_to_state = defaultdict(int)
+        self._state_action_to_staleness = defaultdict(int)
 
     def simulate_model(self):
         state = random.sample(self._state_set, k=1)[0]
@@ -18,14 +19,21 @@ class DynaModel(object):
         return state, action, reward, next_state
 
     def update_model(self, state, action, reward, next_state, aval_action_set):
+        # if state is not traversed before, then add all aval_action as dummy action
         if state not in self._state_set:
             for aval_action in aval_action_set:
                 self._state_to_visited_action[state].add(aval_action)
                 self._state_action_to_reward[(state, aval_action)] = 0
                 self._state_action_to_state[(state, aval_action)] = state
+                self._state_action_to_staleness[(state, aval_action)] = -1
+        # update the reward and transition
         self._state_set.add(state)
         self._state_action_to_reward[(state, action)] = reward
         self._state_action_to_state[(state, action)] = next_state
+        self._state_action_to_staleness[(state, action)] = -1
+        # update the staleness of all the other (state, action) pair
+        for key in self._state_action_to_staleness:
+            self._state_action_to_staleness[key] = self._state_action_to_staleness[key] + 1
 
 class World(object):
     def take_action_get_reward(self, action):
@@ -127,13 +135,10 @@ class DynaQAlgorithm(object):
 
     def reset(self):
         self._dyna_model = DynaModel()
-        self._visited_state_set = set()
         self._state_to_aval_action = defaultdict(set)
-        self._visited_state_action_pair = set()
         self._q_value = defaultdict(int)
         self._acc_reward = 0
         init_state = self._world.get_current_state()
-        self._visited_state_set.add(init_state)
         self._state_to_aval_action[init_state] = self._world.get_curr_aval_action_set()
 
     def policy(self, state):
@@ -161,14 +166,15 @@ class DynaQAlgorithm(object):
         self._acc_reward = self._acc_reward + reward
         # record available action in the updated state
         self._state_to_aval_action[next_state] = self._world.get_curr_aval_action_set()
-        # Q learning
-        self.q_learning(curr_state, action, reward, next_state)
         # register the transition to the dyna_model
         self._dyna_model.update_model(curr_state, 
                                       action, 
                                       reward, 
                                       next_state,
                                       self._state_to_aval_action[curr_state])
+        # Q learning
+        self.q_learning(curr_state, action, reward, next_state)
+        # simulate and plan
         if any([self._q_value[key]>0.0001 for key in self._q_value]):
             for _ in range(self._num_sim_per_real_action):
                 # get random state
