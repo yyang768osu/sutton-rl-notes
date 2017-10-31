@@ -107,7 +107,6 @@ class Maze(World):
     def get_curr_aval_action_set(self):
         return self._action_space
 
-
 class DynaQAlgorithm(object):
     def __init__(self, 
                  world,
@@ -116,17 +115,19 @@ class DynaQAlgorithm(object):
                  alpha=0.1,
                  greedy_epsilon=0.1):
         self._world = world
+        self._num_sim_per_real_action = num_sim_per_real_action
+        self._greedy_epsilon = greedy_epsilon
+        self._alpha = alpha
+        self._gamma = gamma
+        self.reset()
+
+    def reset(self):
         self._dyna_model = DynaModel()
         self._visited_state_set = set()
         self._state_to_aval_action = defaultdict(set)
         self._visited_state_action_pair = set()
         self._q_value = defaultdict(int)
-        self._num_sim_per_real_action = num_sim_per_real_action
-        self._greedy_epsilon = greedy_epsilon
-        self._alpha = alpha
-        self._gamma = gamma
         self._acc_reward = 0
-
         init_state = self._world.get_current_state()
         self._visited_state_set.add(init_state)
         self._state_to_aval_action[init_state] = self._world.get_curr_aval_action_set()
@@ -174,6 +175,8 @@ class DynaQAlgorithm(object):
                                               for next_action in self._state_to_aval_action[next_state]])
         td_error = td_target - self._q_value[(curr_state, action)]
         self._q_value[(curr_state, action)] = self._q_value[(curr_state, action)] + self._alpha*td_error
+        if self._q_value[(curr_state, action)] < 0.05:
+            self._q_value[(curr_state, action)] = 0
 
     def reset_acc_reward(self):
         self._acc_reward = 0
@@ -197,7 +200,7 @@ if __name__ == '__main__':
 
     dyna_q_algorithm = DynaQAlgorithm(world=maze, 
                                       num_sim_per_real_action=10, 
-                                      greedy_epsilon=0.2,
+                                      greedy_epsilon=0.1,
                                       gamma=0.9,
                                       alpha=0.5)
     for step in range(1000):
