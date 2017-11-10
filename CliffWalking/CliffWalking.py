@@ -102,13 +102,23 @@ class CliffWalk(World):
         return reward
 
 class Learner(object):
-    def __init__(self, world, algorithm, greedy_epsilon=0.1, alpha=0.5, gamma=1):
+    def __init__(self, world, algorithm='sarsa', greedy_epsilon=0.1, alpha=0.5, gamma=1):
         self._world = world
-        self._algorithm = algorithm
         self._greedy_epsilon = greedy_epsilon
-        self._alpha = alpha
         self._gamma = gamma
+        self.set_algorithm(algorithm)
+        self.set_alpha(alpha)
+        self.reset()
+
+    def reset(self):
         self._state_action_value = defaultdict(lambda: 0)
+        self._world.restart()
+    
+    def set_alpha(self, alpha):
+        self._alpha = alpha
+
+    def set_algorithm(self, algorithm):
+        self._algorithm = algorithm
         assert(self._algorithm in {'sarsa', 'expected-sarsa', 'q-learning'})
 
     def run_single_episode(self):
@@ -130,7 +140,7 @@ class Learner(object):
             elif self._algorithm == 'expected-sarsa':
                 self.expected_sarsa(state, action, reward, next_state, next_aval_actions)
             elif self._algorithm == 'q-learning':
-                self.expected_sarsa(state, action, reward, next_state, next_aval_actions)
+                self.q_learning(state, action, reward, next_state, next_aval_actions)
             else:
                 raise TypeError('Wrong algorithm input')
             state, action = next_state, next_action
