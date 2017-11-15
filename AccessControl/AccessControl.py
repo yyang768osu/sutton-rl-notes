@@ -21,9 +21,15 @@ class PriorityQueue(object):
         return self._current_state
 
     def get_curr_aval_action_set(self):
-        if self._current_state.num_aval_server <= self._num_aval_server:
+        if self._current_state.num_aval_server > 0:
             return ['serve', 'drop']
         return ['drop', ]
+    
+    def get_aval_action_set(self, state):
+        if state.num_aval_server > 0:
+            return ['serve', 'drop']
+        return ['drop', ]
+        
 
     def take_action_get_reward(self, action):
         assert(action in self.get_curr_aval_action_set())
@@ -31,14 +37,15 @@ class PriorityQueue(object):
         reward = 0
         if action == 'serve':
             reward = self._current_state.priority
-            num_aval_server_curr += 1
+            num_aval_server_curr -= 1
+            assert(num_aval_server_curr>=0)
         elif action == 'drop':
             pass
         else:
             raise TypeError('Wrong action value')
-        num_aval_server_next = 0
-        for _ in range(num_aval_server_curr):
-            if random.random() > self._p:
+        num_aval_server_next = num_aval_server_curr
+        for _ in range(self._num_aval_server - num_aval_server_curr):
+            if random.random() < self._p:
                 num_aval_server_next += 1
         self._current_state = QueueState(num_aval_server_next, random.choice(self._priority_level))
         return reward
@@ -83,4 +90,5 @@ class Learner(object):
 if __name__ == '__main__':
     world = PriorityQueue()
     learner = Learner(world=world)
-    learner.run(num_iter=50)
+    learner.run(num_iter=1000)
+    print(learner._state_action_value)
